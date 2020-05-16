@@ -31,12 +31,18 @@ namespace AmanDiyim.API.Controllers
             this.MyConfig = myConfig;
         }
 
+        /*
+            Mevcut konumdan 1KM mesafe uzaklıkta olan kaza bildirimlerini görüntüler.
+        */
         [HttpPost("query")]
         [HttpGet("query")]
         public IActionResult Query()
         {
             try
             {
+                /*
+                    Method a gelen json isteği deserialize edilir.
+                */
                 var req = HttpContext.Request;
 
                 if (req.ContentType.ToLower(enCulture) != "application/json")
@@ -54,12 +60,16 @@ namespace AmanDiyim.API.Controllers
                     bodyStr = t.Result;
                 }
 
+                //Database bağlantısı yapılır.
+
                 ResultActions result = new ResultActions();
                 MySqlCompiler qcompiler;
                 var query = new QueryFactory(new MySqlConnection(MyConfig.Value.Database), qcompiler = new MySqlCompiler());
+                //Longtitude, Latitude bilgisi gelen requestten parse edilir
                 dynamic reqParams = JsonConvert.DeserializeObject(bodyStr);
                 decimal lng = reqParams.longtitude;
                 decimal lat = reqParams.latitude;
+                //Api Key kontrolü yapılır.
                 try
                 {
                     string key = HttpContext.Request.Headers["apiKey"].ToString();
@@ -75,6 +85,7 @@ namespace AmanDiyim.API.Controllers
                 }
                 catch (Exception)
                 {
+                    //Api Key hatalı ise aşağıdaki hata mesajı görüntülenir.
                     return new ObjectResult(new ResultActions()
                     {
                         Success = false,
@@ -82,6 +93,8 @@ namespace AmanDiyim.API.Controllers
                         Actions = null
                     });
                 }
+
+                //1KM mesafe bilgileri hesaplanır.
 
                 decimal lngKM1 = 0.004073m;
                 decimal latKM1 = 0.010857m;
@@ -92,11 +105,13 @@ namespace AmanDiyim.API.Controllers
                 decimal lngHigh = lng + lngKM1 / 2m;
                 decimal latHigh = lat + latKM1 / 2m;
 
+                //Database üzerinden kaza bildirimleri alınır.
+
                 var q = query.FromQuery(new SqlKata.Query("actions")).WhereBetween<decimal>("Lng", lngLow, lngHigh).WhereBetween<decimal>("Lat", latLow, latHigh);
                 var r = qcompiler.Compile(q);
 
                 var results = q.Get().ToArray();
-
+                //Alınan sonuçlar map edilir.
                 result.Actions = (from item in results
                                   select new AmanDiyimAction()
                                   {
@@ -108,11 +123,13 @@ namespace AmanDiyim.API.Controllers
                                   }).ToList();
 
                 result.Success = true;
+                //Map edilen sonuçlar response olarak dönülür.
                 return new ObjectResult(result);
 
             }
             catch (Exception)
             {
+                //Serviste bir hata oluştuğunda aşağıdaki hata mesajı görüntülenir.
                 return new ObjectResult(new ResultActions()
                 {
                     Actions = null,
